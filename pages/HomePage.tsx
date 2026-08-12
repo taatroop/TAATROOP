@@ -306,8 +306,8 @@ const HomePage: React.FC = () => {
   return (
     <div className="bg-[#FAF8F5] text-stone-900 min-h-screen font-sans">
       
-      {/* 1. HERO BANNER SECTION (STRICTLY FULL PAGE HEIGHT - 100DVH) */}
-      <section className="hidden md:flex relative w-full h-[100dvh] max-h-[100dvh] flex-col justify-center overflow-hidden bg-[#18201C] pt-[95px] sm:pt-[110px] md:pt-[125px] pb-8 sm:pb-12">
+      {/* 1. HERO BANNER SECTION (95% SCREEN HEIGHT) */}
+      <section className="flex relative w-full h-[95dvh] min-h-[95dvh] flex-col justify-center overflow-hidden bg-[#18201C] pt-[85px] sm:pt-[110px] md:pt-[125px] pb-8 sm:pb-12">
         <div className="absolute inset-0 z-0">
           <picture className="w-full h-full block">
             {settings?.heroMobileImage && (
