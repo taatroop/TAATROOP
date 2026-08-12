@@ -582,15 +582,15 @@ const HomePage: React.FC = () => {
             <div className="flex lg:justify-center items-center">
               <button 
                 onClick={() => setIsVideoOpen(true)}
-                className="flex items-center space-x-3 sm:space-x-4 bg-black/40 backdrop-blur-md border border-white/20 p-3.5 sm:p-4 px-5 sm:px-6 hover:bg-black/60 transition-all rounded-full text-white group shadow-2xl cursor-pointer"
+                className="flex items-center space-x-2 sm:space-x-4 bg-black/40 backdrop-blur-md border border-white/20 p-2 sm:p-4 px-3.5 sm:px-6 hover:bg-black/60 transition-all rounded-full text-white group shadow-2xl cursor-pointer"
               >
-                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white text-stone-900 flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
-                  <Play size={16} className="fill-stone-900 ml-0.5 sm:hidden" />
+                <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-full bg-white text-stone-900 flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
+                  <Play size={13} className="fill-stone-900 ml-0.5 sm:hidden" />
                   <Play size={18} className="fill-stone-900 ml-0.5 hidden sm:block" />
                 </div>
                 <div className="text-left">
-                  <span className="block text-[9.5px] sm:text-[10px] font-bold uppercase tracking-[0.18em] sm:tracking-[0.2em] text-stone-300">WATCH VIDEO</span>
-                  <span className="block text-xs font-serif italic text-amber-200">The Art of Handloom</span>
+                  <span className="block text-[8px] sm:text-[10px] font-bold uppercase tracking-[0.15em] sm:tracking-[0.2em] text-stone-300">WATCH VIDEO</span>
+                  <span className="block text-[10px] sm:text-xs font-serif italic text-amber-200">The Art of Handloom</span>
                 </div>
               </button>
             </div>
