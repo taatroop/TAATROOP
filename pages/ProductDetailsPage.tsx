@@ -593,10 +593,11 @@ const ProductDetailsPage: React.FC = () => {
 
                 {/* WRITE A REVIEW DROPDOWN BOX */}
                 <div className="bg-[#FAF8F5] rounded-2xl border border-[#E5DFD5] shadow-2xs mt-4 overflow-hidden transition-all">
+                  {/* Mobile Toggle Button */}
                   <button
                     type="button"
                     onClick={() => setIsReviewFormOpen(!isReviewFormOpen)}
-                    className="w-full p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-[#F3EFEA] transition-colors focus:outline-none"
+                    className="w-full md:hidden p-4 sm:p-5 flex items-center justify-between text-left cursor-pointer hover:bg-[#F3EFEA] transition-colors focus:outline-none"
                   >
                     <div className="flex items-center space-x-2">
                       <Star className="text-amber-500 fill-amber-400" size={16} />
@@ -613,8 +614,19 @@ const ProductDetailsPage: React.FC = () => {
                     </div>
                   </button>
 
-                  {isReviewFormOpen && (
-                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t border-[#E8E1D7] animate-fadeIn">
+                  {/* Desktop Static Header */}
+                  <div className="hidden md:flex p-4 sm:p-5 items-center justify-between text-left border-b border-[#E8E1D7]">
+                    <div className="flex items-center space-x-2">
+                      <Star className="text-amber-500 fill-amber-400" size={16} />
+                      <span className="font-bold text-xs text-[#23412F] uppercase tracking-wider">
+                        Write a Review / মতামত দিন
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Form Content: Always open on PC (md:block), collapsible on mobile */}
+                  <div className={isReviewFormOpen ? "block" : "hidden md:block"}>
+                    <div className="px-4 pb-4 sm:px-5 sm:pb-5 pt-1 border-t md:border-t-0 border-[#E8E1D7] animate-fadeIn">
                       {isReviewSubmitted ? (
                         <div className="p-4 bg-white rounded-xl border border-emerald-200 text-center space-y-2 animate-fadeIn shadow-2xs">
                           <div className="flex items-center justify-center text-emerald-800 gap-1.5 font-bold text-xs">
@@ -690,7 +702,7 @@ const ProductDetailsPage: React.FC = () => {
                         </form>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
             </div>
