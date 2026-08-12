@@ -1,0 +1,1719 @@
+
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAppStore } from '../../store';
+import { 
+    Save, LoaderCircle, Plus, Trash2, CheckCircle, Monitor, 
+    Smartphone, Tag, CreditCard, Layout, Image as ImageIcon, 
+    MessageSquare, Shield, X, Share2, Facebook, Instagram, 
+    Twitter, Youtube, ExternalLink, Settings as SettingsIcon, Gift, Truck,
+    Type, Percent, Palette, Move, AlertTriangle, HelpCircle,
+    ShoppingBag, Info, Sparkles, Layers, Eye, EyeOff, SmartphoneNfc, Play,
+    Globe, PhoneCall, MapPin, MousePointer2, AlignLeft,
+    Check, ChevronRight, FileText, Lock, User, ShieldCheck, PlusCircle, BookOpen
+} from 'lucide-react';
+import { SliderImageSetting, ShippingOption, SocialMediaLink, AppSettings, CategoryImageSetting, SignatureBanner } from '../../types';
+import SafeImage from '../../components/SafeImage';
+
+// -------------------------------------------------------------------------
+// UTILITY: Image Processing
+// -------------------------------------------------------------------------
+const compressImage = (file: File, options: { maxWidth: number; quality: number }): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.src = URL.createObjectURL(file);
+        img.onload = () => {
+            URL.revokeObjectURL(img.src);
+            const targetMaxWidth = Math.min(options.maxWidth || 1200, 1200);
+            const quality = Math.min(options.quality || 0.7, 0.75);
+            let { width, height } = img;
+            if (width > height) {
+                if (width > targetMaxWidth) {
+                    height = Math.round((height * targetMaxWidth) / width);
+                    width = targetMaxWidth;
+                }
+            } else {
+                const maxHeight = targetMaxWidth; 
+                if (height > maxHeight) {
+                    width = Math.round((width * maxHeight) / height);
+                    height = maxHeight;
+                }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return reject('Failed to get canvas context');
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = (error) => reject(error);
+    });
+};
+
+// -------------------------------------------------------------------------
+// REUSABLE SUB-COMPONENTS (Compact UI)
+// -------------------------------------------------------------------------
+
+interface ImageInputProps {
+    currentImage: string;
+    onImageChange: (value: string) => void;
+    options: { maxWidth: number; quality: number };
+    label?: string;
+    description?: string;
+}
+
+const ImageAssetInput: React.FC<ImageInputProps> = ({ currentImage, onImageChange, options, label, description }) => {
+    const { notify } = useAppStore();
+    const [inputType, setInputType] = useState<'upload' | 'url'>('upload');
+    const [isProcessing, setIsProcessing] = useState(false);
+    
+    // Strict control: ensure we always have a string
+    const safeImageValue = currentImage || '';
+    
+    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        if (file.size > 15 * 1024 * 1024) {
+             notify('File too large (Max 15MB).', 'error');
+             return;
+        }
+        setIsProcessing(true);
+        try {
+            const result = await compressImage(file, options);
+            onImageChange(result);
+        } catch (error) {
+            notify('Error processing image.', 'error');
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+    
+    const safeDisplayValue = safeImageValue.startsWith('data:') ? '' : safeImageValue;
+    
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                {label && <label className="text-xs font-bold text-stone-500 uppercase tracking-tight">{label}</label>}
+                <div className="flex bg-stone-100 p-0.5 rounded-none font-admin">
+                    <button type="button" onClick={() => setInputType('upload')} className={`px-2 py-0.5 text-[10px] uppercase font-bold rounded-none transition-all ${inputType === 'upload' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-500'}`}>Upload</button>
+                    <button type="button" onClick={() => setInputType('url')} className={`px-2 py-0.5 text-[10px] uppercase font-bold rounded-none transition-all ${inputType === 'url' ? 'bg-white text-stone-950 shadow-sm' : 'text-stone-500'}`}>URL</button>
+                </div>
+            </div>
+            
+            <div className="relative group/asset">
+                {inputType === 'upload' ? (
+                    <div className="flex items-center gap-2 p-2.5 bg-stone-50 border border-dashed border-stone-200 rounded-none hover:border-stone-400 transition-colors cursor-pointer relative overflow-hidden">
+                        <input type="file" onChange={handleFileSelect} accept="image/*" className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                        <ImageIcon className="w-4 h-4 text-stone-400" />
+                        <span className="text-xs font-semibold text-stone-500 truncate font-admin">{safeImageValue ? 'Asset Selected' : 'Choose Local...'}</span>
+                        {isProcessing && <LoaderCircle className="w-3 h-3 animate-spin text-stone-900 ml-auto" />}
+                    </div>
+                ) : (
+                    <div className="relative">
+                        <input 
+                            type="text" 
+                            value={safeDisplayValue} 
+                            onChange={(e) => onImageChange(e.target.value)} 
+                            placeholder="https://..." 
+                            className="w-full p-2 pl-8 border border-stone-200 rounded-none text-xs bg-white text-stone-900 focus:border-stone-900 outline-none shadow-sm font-admin" 
+                        />
+                        <ExternalLink className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-stone-300" />
+                    </div>
+                )}
+                
+                {safeImageValue && (
+                    <div className="mt-2 relative rounded-none overflow-hidden group/prev border border-stone-100 shadow-sm w-20 h-20">
+                        <SafeImage src={safeImageValue} alt="Preview" className="w-full h-full object-cover" />
+                        <button onClick={() => onImageChange('')} className="absolute inset-0 bg-black/40 opacity-0 group-hover/prev:opacity-100 transition-opacity flex items-center justify-center text-white">
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                )}
+            </div>
+            {description && <p className="text-[10px] text-stone-400">{description}</p>}
+        </div>
+    );
+};
+
+
+const CompactSectionHeader: React.FC<{ icon: React.ElementType, title: string, sub: string }> = ({ icon: Icon, title, sub }) => (
+    <div className="flex items-center gap-3 mb-6 border-b border-stone-100 pb-4 font-admin">
+        <div className="p-2 bg-stone-100 rounded-none"><Icon className="w-5 h-5 text-stone-900" /></div>
+        <div>
+            <h3 className="text-sm font-bold text-stone-900 uppercase tracking-tight">{title}</h3>
+            <p className="text-xs text-stone-500 font-medium uppercase tracking-tight">{sub}</p>
+        </div>
+    </div>
+);
+
+const FormLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <label className="text-xs font-black text-stone-500 uppercase tracking-tight ml-1 mb-1 block font-admin">
+        {children}
+    </label>
+);
+
+const ProfessionalInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => {
+    const { value, ...rest } = props;
+    return (
+        <input 
+            {...rest} 
+            value={value ?? ''}
+            className={`w-full p-3 bg-stone-50 border border-stone-100 rounded-none text-sm text-stone-900 focus:border-black focus:ring-4 focus:ring-stone-950/5 transition-all outline-none animate-fadeIn placeholder:text-stone-300 font-bold font-admin ${props.className || ''}`}
+        />
+    );
+};
+
+const ProfessionalTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => {
+    const { value, ...rest } = props;
+    return (
+        <textarea 
+            {...rest} 
+            value={value ?? ''}
+            className={`w-full p-4 bg-stone-50 border border-stone-100 rounded-none text-sm text-stone-900 focus:border-black focus:ring-4 focus:ring-stone-950/5 transition-all outline-none animate-fadeIn placeholder:text-stone-300 font-medium font-admin ${props.className || ''}`}
+        />
+    );
+};
+
+// -------------------------------------------------------------------------
+// MAIN COMPONENT
+// -------------------------------------------------------------------------
+
+const AdminSettingsPage: React.FC = () => {
+    const { settings, updateSettings, notify } = useAppStore();
+    const [isSaving, setIsSaving] = useState(false);
+    const [isSaved, setIsSaved] = useState(false);
+    const [activeTab, setActiveTab] = useState('categories');
+    const [confirmSyncText, setConfirmSyncText] = useState('');
+
+    // Password visibility states
+    const [showNewPass, setShowNewPass] = useState(false);
+    const [showConfirmPass, setShowConfirmPass] = useState(false);
+
+    // --- Detailed States for all AppSettings properties ---
+    
+    // Authentication
+    const [adminEmail, setAdminEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
+    // SMTP Outbound Configurations
+    const [smtpHost, setSmtpHost] = useState('');
+    const [smtpPort, setSmtpPort] = useState(587);
+    const [smtpSecure, setSmtpSecure] = useState(false);
+    const [smtpUser, setSmtpUser] = useState('');
+    const [smtpPass, setSmtpPass] = useState('');
+    const [smtpSenderName, setSmtpSenderName] = useState('TAATROOP');
+    const [notificationRecipients, setNotificationRecipients] = useState('');
+    const [showSmtpPass, setShowSmtpPass] = useState(false);
+
+    // Telegram Bot Instant Notifications
+    const [telegramBotToken, setTelegramBotToken] = useState('');
+    const [telegramChatId, setTelegramChatId] = useState('');
+    const [telegramEnabled, setTelegramEnabled] = useState(true);
+    const [showTelegramToken, setShowTelegramToken] = useState(false);
+    const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+    const [showTelegramGuide, setShowTelegramGuide] = useState(false);
+
+    // --- Safety Logic: Only require confirmation if password fields have content ---
+    const isPasswordModified = newPassword.length > 0 || confirmNewPassword.length > 0;
+    const isSecurityTab = activeTab === 'general';
+    const isConfirmationRequired = isSecurityTab && isPasswordModified;
+    const isConfirmationValid = !isConfirmationRequired || confirmSyncText === 'CONFIRM';
+    
+    // Header Logo & Branding
+    const [headerLogoType, setHeaderLogoType] = useState<'text' | 'image'>('image');
+    const [headerLogoImage, setHeaderLogoImage] = useState('');
+    const [headerLogoText, setHeaderLogoText] = useState('TAATROOP');
+    const [headerLogoHeight, setHeaderLogoHeight] = useState(60); // PC / Laptop
+    const [headerLogoHeightMobile, setHeaderLogoHeightMobile] = useState(60); // Phone / Mobile
+
+    // Category Structure
+    const [categoriesList, setCategoriesList] = useState<string[]>([]);
+    const [pausedCategoriesList, setPausedCategoriesList] = useState<string[]>([]);
+    const [menuCategoriesList, setMenuCategoriesList] = useState<string[]>([]);
+    const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+    const [newCategoryName, setNewCategoryName] = useState('');
+    const [categoryImages, setCategoryImages] = useState<CategoryImageSetting[]>([]);
+    
+    // Payment Systems
+    const [onlinePaymentInfo, setOnlinePaymentInfo] = useState('');
+    const [onlinePaymentFontSize, setOnlinePaymentFontSize] = useState('0.875rem');
+    const [codEnabled, setCodEnabled] = useState(true);
+    const [onlinePaymentEnabled, setOnlinePaymentEnabled] = useState(true);
+    const [onlinePaymentMethodsText, setOnlinePaymentMethodsText] = useState('');
+    
+    // Logistics
+    const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
+    
+    // Hero Components
+    const [sliderImages, setSliderImages] = useState<SliderImageSetting[]>([]);
+    const [homepageNewArrivalsCount, setHomepageNewArrivalsCount] = useState(4);
+    const [homepageTrendingCount, setHomepageTrendingCount] = useState(4);
+    const [showSliderText, setShowSliderText] = useState(true);
+
+    // Hero Section Detail Fields (Home Page)
+    const [heroEyebrow, setHeroEyebrow] = useState('TAATROOP');
+    const [heroTitle, setHeroTitle] = useState('ঐতিহ্যের বুননে\nআস্থার স্পর্শ');
+    const [heroSubtitle, setHeroSubtitle] = useState('PREMIUM HANDLOOM LUNGI FROM SIRAJGANJ, BANGLADESH');
+    const [heroImage, setHeroImage] = useState('');
+    const [heroMobileImage, setHeroMobileImage] = useState('');
+    const [heroButtonText, setHeroButtonText] = useState('SHOP COLLECTION');
+    const [heroButtonLink, setHeroButtonLink] = useState('/shop');
+    const [heroVideoButtonText, setHeroVideoButtonText] = useState('WATCH VIDEO');
+    const [heroVideoTitle, setHeroVideoTitle] = useState('The Art of Handloom Weaver - Sirajganj Traditional Lungi Craftsmanship');
+    const [heroVideoUrl, setHeroVideoUrl] = useState('');
+    const [heroVideoUrlPc, setHeroVideoUrlPc] = useState('');
+    const [heroVideoUrlMobile, setHeroVideoUrlMobile] = useState('');
+    
+    // Static Content
+    const [footerDescription, setFooterDescription] = useState('');
+    const [socialMediaLinks, setSocialMediaLinks] = useState<SocialMediaLink[]>([]);
+    const [privacyPolicy, setPrivacyPolicy] = useState('');
+    const [contactAddress, setContactAddress] = useState('');
+    const [contactPhone, setContactPhone] = useState('');
+    const [contactEmail, setContactEmail] = useState('');
+    const [footerEmail, setFooterEmail] = useState('');
+    const [whatsappNumber, setWhatsappNumber] = useState('');
+    const [showWhatsAppButton, setShowWhatsAppButton] = useState(true);
+
+    // Size Guide
+    const [sizeGuide, setSizeGuide] = useState<any[]>([]);
+
+    // Campaign Banners
+    const [signatureBanners, setSignatureBanners] = useState<SignatureBanner[]>([]);
+    const [signatureMobileDisplayMode, setSignatureMobileDisplayMode] = useState<'both' | 'banner1' | 'banner2'>('both');
+
+    // Tracking
+    const [gaMeasurementId, setGaMeasurementId] = useState('');
+    const [gaApiSecret, setGaApiSecret] = useState('');
+    const [fbPixelId, setFbPixelId] = useState('');
+    const [fbAccessToken, setFbAccessToken] = useState('');
+    const [fbTestCode, setFbTestCode] = useState('');
+    const [gtmId, setGtmId] = useState('');
+    const [exitIntentPopupEnabled, setExitIntentPopupEnabled] = useState(false);
+    const [exitIntentDiscount, setExitIntentDiscount] = useState(60);
+    const [exitIntentCouponCode, setExitIntentCouponCode] = useState('SAVE60');
+    const [freeShippingEnabled, setFreeShippingEnabled] = useState(false);
+    const [contactMapEmbed, setContactMapEmbed] = useState('');
+
+    // Our Story Page Images
+    const [ourStoryHeroImage, setOurStoryHeroImage] = useState('');
+    const [ourStoryStoryImage, setOurStoryStoryImage] = useState('');
+    const [ourStoryHeritageImage, setOurStoryHeritageImage] = useState('');
+    const [ourStoryGalleryImages, setOurStoryGalleryImages] = useState<string[]>([]);
+
+    // Initialize state from store
+    useEffect(() => {
+        if (settings) {
+            setOurStoryHeroImage(settings.ourStoryHeroImage || '');
+            setOurStoryStoryImage(settings.ourStoryStoryImage || '');
+            setOurStoryHeritageImage(settings.ourStoryHeritageImage || '');
+            setOurStoryGalleryImages(settings.ourStoryGalleryImages || []);
+            setHeaderLogoType(settings.headerLogoType || 'text');
+            setHeaderLogoImage(settings.headerLogoImage || '');
+            setHeaderLogoText(settings.headerLogoText || 'TAATROOP');
+            setHeaderLogoHeight(settings.headerLogoHeight || 60);
+            setHeaderLogoHeightMobile(settings.headerLogoHeightMobile || 60);
+            setAdminEmail(settings.adminEmail || '');
+            const cats = settings.categories || [];
+            const catImgs = settings.categoryImages || [];
+            const syncedCatImgs = cats.map((cat: string) => {
+                const found = catImgs.find((ci: any) => ci.categoryName && ci.categoryName.toLowerCase() === cat.toLowerCase());
+                return { categoryName: cat, image: found ? found.image : '' };
+            });
+            setCategoriesList(cats);
+            setCategoryImages(syncedCatImgs);
+            const pausedCats = settings.pausedCategories || [];
+            const menuCats = settings.menuCategories && settings.menuCategories.length > 0 ? settings.menuCategories : cats;
+            setPausedCategoriesList(pausedCats);
+            setMenuCategoriesList(menuCats);
+            setOnlinePaymentInfo(settings.onlinePaymentInfo || '');
+            setOnlinePaymentFontSize(settings.onlinePaymentInfoStyles?.fontSize || '0.875rem');
+            setCodEnabled(settings.codEnabled ?? true);
+            setOnlinePaymentEnabled(settings.onlinePaymentEnabled ?? true);
+            setOnlinePaymentMethodsText(settings.onlinePaymentMethods?.join(', ') || '');
+            setShippingOptions(settings.shippingOptions || []);
+            setSliderImages(settings.sliderImages || []);
+            setHomepageNewArrivalsCount(settings.homepageNewArrivalsCount || 4);
+            setHomepageTrendingCount(settings.homepageTrendingCount || 4);
+            setShowSliderText(settings.showSliderText ?? true);
+
+            setHeroEyebrow(settings.heroEyebrow || 'TAATROOP');
+            setHeroTitle(settings.heroTitle || 'ঐতিহ্যের বুননে\nআস্থার স্পর্শ');
+            setHeroSubtitle(settings.heroSubtitle || 'PREMIUM HANDLOOM LUNGI FROM SIRAJGANJ, BANGLADESH');
+            setHeroImage(settings.heroImage || '');
+            setHeroMobileImage(settings.heroMobileImage || '');
+            setHeroButtonText(settings.heroButtonText || 'SHOP COLLECTION');
+            setHeroButtonLink(settings.heroButtonLink || '/shop');
+            setHeroVideoButtonText(settings.heroVideoButtonText || 'WATCH VIDEO');
+            setHeroVideoTitle(settings.heroVideoTitle || 'The Art of Handloom Weaver - Sirajganj Traditional Lungi Craftsmanship');
+            setHeroVideoUrl(settings.heroVideoUrl || '');
+            setHeroVideoUrlPc(settings.heroVideoUrlPc || settings.heroVideoUrl || '');
+            setHeroVideoUrlMobile(settings.heroVideoUrlMobile || settings.heroVideoUrl || '');
+            setFooterDescription(settings.footerDescription || '');
+            setSocialMediaLinks(settings.socialMediaLinks || []);
+            setPrivacyPolicy(settings.privacyPolicy || '');
+            setContactAddress(settings.contactAddress || '');
+            setContactPhone(settings.contactPhone || '');
+            setContactEmail(settings.contactEmail || '');
+            setFooterEmail(settings.footerEmail || '');
+            setWhatsappNumber(settings.whatsappNumber || '');
+            setShowWhatsAppButton(settings.showWhatsAppButton ?? true);
+            setSizeGuide(settings.sizeGuide || []);
+            
+            setSignatureBanners(settings.signatureBanners || []);
+            setSignatureMobileDisplayMode(settings.signatureMobileDisplayMode || 'both');
+
+            setGaMeasurementId(settings.gaMeasurementId || '');
+            setGaApiSecret(settings.gaApiSecret || '');
+            setFbPixelId(settings.fbPixelId || '');
+            setFbAccessToken(settings.fbAccessToken || '');
+            setFbTestCode(settings.fbTestCode || '');
+            setGtmId(settings.gtmId || '');
+            setExitIntentPopupEnabled(settings.exitIntentPopupEnabled ?? false);
+            setExitIntentDiscount(settings.exitIntentDiscount || 60);
+            setExitIntentCouponCode(settings.exitIntentCouponCode || 'SAVE60');
+            setFreeShippingEnabled(settings.freeShippingEnabled ?? false);
+            setContactMapEmbed(settings.contactMapEmbed || '');
+
+            // Hydrate SMTP settings
+            setSmtpHost(settings.smtpHost || '');
+            setSmtpPort(settings.smtpPort || 587);
+            setSmtpSecure(settings.smtpSecure ?? false);
+            setSmtpUser(settings.smtpUser || '');
+            setSmtpPass(settings.smtpPass || '');
+            setSmtpSenderName(settings.smtpSenderName || 'TAATROOP');
+            setNotificationRecipients(settings.notificationRecipients || '');
+
+            // Hydrate Telegram settings
+            setTelegramBotToken(settings.telegramBotToken || '');
+            setTelegramChatId(settings.telegramChatId || '');
+            setTelegramEnabled(settings.telegramEnabled ?? true);
+        }
+    }, [settings]);
+
+    // --- Interaction Handlers ---
+
+    // TAB SWITCHER WITH CLEANUP
+    const handleTabSwitch = (tab: string) => {
+        // If we are leaving the security tab, clear password states to prevent blockages on other tabs
+        if (activeTab === 'general' && tab !== 'general') {
+            setNewPassword('');
+            setConfirmNewPassword('');
+            setConfirmSyncText('');
+            setShowNewPass(false);
+            setShowConfirmPass(false);
+        }
+        setActiveTab(tab);
+    };
+
+    const handleAddCategory = () => {
+        const val = newCategoryName.trim();
+        if (!val) return;
+        if (categoriesList.some(c => c.toLowerCase() === val.toLowerCase())) {
+            notify("Category already exists.", "error");
+            return;
+        }
+        setCategoriesList(prev => [...prev, val]);
+        setMenuCategoriesList(prev => [...prev, val]); // enable in menu by default
+        setCategoryImages(prev => {
+            const exists = prev.some(ci => ci.categoryName && ci.categoryName.toLowerCase() === val.toLowerCase());
+            if (exists) {
+                return prev.map(ci => ci.categoryName && ci.categoryName.toLowerCase() === val.toLowerCase() ? { ...ci, categoryName: val } : ci);
+            }
+            return [...prev, { categoryName: val, image: '' }];
+        });
+        setNewCategoryName('');
+    };
+
+    const handleRemoveCategory = (name: string) => {
+        setCategoryToDelete(name);
+    };
+
+    const confirmDeleteCategory = () => {
+        if (!categoryToDelete) return;
+        const name = categoryToDelete;
+        setCategoriesList(p => p.filter(c => c !== name));
+        setCategoryImages(p => p.filter(ci => ci.categoryName !== name));
+        setPausedCategoriesList(p => p.filter(c => c !== name));
+        setMenuCategoriesList(p => p.filter(c => c !== name));
+        setCategoryToDelete(null);
+        notify(`Removed "${name}" category.`, "info");
+    };
+
+    const handleAddSlide = () => {
+        setSliderImages(prev => [...prev, { 
+            id: Date.now(), 
+            title: 'New Trend', 
+            subtitle: 'Collection description...', 
+            color: 'text-white', 
+            image: '' 
+        }]);
+    };
+
+    const handleAddShipping = () => {
+        setShippingOptions(prev => [...prev, { id: Date.now().toString(), label: 'New Zone', charge: 0 }]);
+    };
+
+    const handleAddSignatureBanner = () => {
+        setSignatureBanners(prev => [...prev, {
+            id: Date.now().toString(),
+            header: 'EXQUISITE TEXTURES',
+            title: 'Timeless Collection Arrivals',
+            description: 'Crafted for moments of pure grace...',
+            buttonText: 'Discover Collection',
+            link: '/shop',
+            desktopImage: '',
+            mobileImage: '',
+            layout: 'landscape'
+        }]);
+    };
+
+    const handleTestTelegram = async () => {
+        if (!telegramBotToken.trim() || !telegramChatId.trim()) {
+            notify("Please enter Bot Token and Chat ID first.", "error");
+            return;
+        }
+        setIsTestingTelegram(true);
+        try {
+            const token = localStorage.getItem('unique_corner_admin_token');
+            const res = await fetch('/api/settings/test-telegram', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    botToken: telegramBotToken,
+                    chatId: telegramChatId
+                })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                notify("🔔 Test message sent! Check your Telegram phone app.", "success");
+            } else {
+                notify(data.message || "Failed to send test message.", "error");
+            }
+        } catch (err: any) {
+            notify("Error testing Telegram: " + (err.message || "Connection error"), "error");
+        } finally {
+            setIsTestingTelegram(false);
+        }
+    };
+
+    const handleSave = async () => {
+        // Validation: ONLY check password match and confirm text if password is actually being changed
+        if (isSecurityTab && isPasswordModified) {
+            if (newPassword !== confirmNewPassword) {
+                notify("Passwords do not match.", "error");
+                return;
+            }
+            if (confirmSyncText !== 'CONFIRM') {
+                notify("Please type CONFIRM to push sensitive updates.", "error");
+                return;
+            }
+        }
+        
+        setIsSaving(true);
+        try {
+            await updateSettings({
+                headerLogoType,
+                headerLogoImage,
+                headerLogoText,
+                headerLogoHeight,
+                headerLogoHeightMobile,
+                adminEmail, 
+                adminPassword: (isSecurityTab && isPasswordModified) ? newPassword : undefined,
+                categories: categoriesList, 
+                categoryImages,
+                pausedCategories: pausedCategoriesList,
+                menuCategories: menuCategoriesList,
+                onlinePaymentInfo, onlinePaymentInfoStyles: { fontSize: onlinePaymentFontSize },
+                codEnabled, onlinePaymentEnabled,
+                onlinePaymentMethods: onlinePaymentMethodsText.split(',').map(m => m.trim()).filter(Boolean),
+                shippingOptions, sliderImages, homepageNewArrivalsCount, homepageTrendingCount, showSliderText,
+                heroEyebrow, heroTitle, heroSubtitle, heroImage, heroMobileImage, heroButtonText, heroButtonLink, heroVideoButtonText, heroVideoTitle, heroVideoUrl: heroVideoUrlPc || heroVideoUrl, heroVideoUrlPc, heroVideoUrlMobile,
+                footerDescription, socialMediaLinks, privacyPolicy, contactAddress, contactPhone, contactEmail, footerEmail,
+                whatsappNumber, showWhatsAppButton,
+                sizeGuide,
+                signatureBanners: signatureBanners,
+                signatureMobileDisplayMode,
+                gaMeasurementId, gaApiSecret,
+                fbPixelId, fbAccessToken, fbTestCode,
+                gtmId,
+                exitIntentPopupEnabled,
+                exitIntentDiscount,
+                exitIntentCouponCode,
+                freeShippingEnabled,
+                contactMapEmbed,
+                smtpHost,
+                smtpPort,
+                smtpSecure,
+                smtpUser,
+                smtpPass,
+                smtpSenderName,
+                notificationRecipients,
+                telegramBotToken,
+                telegramChatId,
+                telegramEnabled,
+                ourStoryHeroImage,
+                ourStoryStoryImage,
+                ourStoryHeritageImage,
+                ourStoryGalleryImages
+            });
+            setIsSaved(true);
+            setConfirmSyncText('');
+            setTimeout(() => setIsSaved(false), 2000);
+            setNewPassword(''); setConfirmNewPassword('');
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    // --- Tab Rendering Logic (All detail fields included) ---
+
+    const renderTabContent = () => {
+        const cardClass = "bg-white p-5 sm:p-10 rounded-none border border-stone-100 shadow-[0_30px_80px_rgba(0,0,0,0.01)] animate-fadeIn space-y-8 sm:space-y-12 font-admin";
+
+        switch (activeTab) {
+            case 'headerLogo': return (
+                <div className={cardClass}>
+                    <CompactSectionHeader icon={ImageIcon} title="Header Logo Management" sub="Upload and adjust your store image logo for PC & Mobile header" />
+                    
+                    <div className="space-y-6 font-admin">
+                        <ImageAssetInput 
+                            label="Store Header Logo Image"
+                            description="Upload a transparent PNG, WebP, SVG, or JPG image logo file, or paste an image URL."
+                            currentImage={headerLogoImage}
+                            onImageChange={val => {
+                                setHeaderLogoImage(val);
+                                setHeaderLogoType('image');
+                            }}
+                            options={{ maxWidth: 800, quality: 0.9 }}
+                        />
+
+                        {/* Logo Height Controls: Separate for PC and Mobile */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+                            {/* PC / Desktop Height */}
+                            <div className="space-y-3 p-5 bg-stone-50/70 border border-stone-200">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <Monitor className="w-4 h-4 text-stone-700" />
+                                        <FormLabel>PC / Desktop Logo Height</FormLabel>
+                                    </div>
+                                    <span className="text-xs font-black text-stone-900 bg-white border border-stone-200 px-2.5 py-1 font-mono">{headerLogoHeight}px</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min={30} 
+                                    max={150} 
+                                    step={2}
+                                    value={headerLogoHeight} 
+                                    onChange={e => setHeaderLogoHeight(Number(e.target.value))}
+                                    className="w-full accent-stone-950 cursor-pointer h-2 bg-stone-200 rounded-none"
+                                />
+                                <div className="flex justify-between text-[10px] text-stone-400 font-mono uppercase tracking-wider">
+                                    <span>30px</span>
+                                    <span>60px (Default)</span>
+                                    <span>150px</span>
+                                </div>
+                            </div>
+
+                            {/* Phone / Mobile Height */}
+                            <div className="space-y-3 p-5 bg-stone-50/70 border border-stone-200">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2">
+                                        <Smartphone className="w-4 h-4 text-stone-700" />
+                                        <FormLabel>Phone / Mobile Logo Height</FormLabel>
+                                    </div>
+                                    <span className="text-xs font-black text-stone-900 bg-white border border-stone-200 px-2.5 py-1 font-mono">{headerLogoHeightMobile}px</span>
+                                </div>
+                                <input 
+                                    type="range" 
+                                    min={30} 
+                                    max={150} 
+                                    step={2}
+                                    value={headerLogoHeightMobile} 
+                                    onChange={e => setHeaderLogoHeightMobile(Number(e.target.value))}
+                                    className="w-full accent-stone-950 cursor-pointer h-2 bg-stone-200 rounded-none"
+                                />
+                                <div className="flex justify-between text-[10px] text-stone-400 font-mono uppercase tracking-wider">
+                                    <span>30px</span>
+                                    <span>60px (Default)</span>
+                                    <span>150px</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Dual Live Header Preview */}
+                        <div className="space-y-3 pt-2">
+                            <FormLabel>Header Logo Live Preview</FormLabel>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* PC Preview */}
+                                <div className="p-6 bg-white border border-stone-200 shadow-inner flex flex-col items-center justify-center min-h-[120px] relative">
+                                    <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-stone-400">
+                                        <Monitor className="w-3 h-3" />
+                                        <span>PC / Desktop View</span>
+                                    </div>
+                                    {headerLogoImage ? (
+                                        <img 
+                                            src={headerLogoImage} 
+                                            alt="Header Logo PC Preview" 
+                                            style={{ maxHeight: `${headerLogoHeight}px`, maxWidth: '240px' }} 
+                                            className="object-contain mt-3" 
+                                        />
+                                    ) : (
+                                        <div className="text-stone-400 text-xs font-bold uppercase tracking-wider italic mt-3">Default Taatroop Logo active (No custom logo uploaded)</div>
+                                    )}
+                                </div>
+
+                                {/* Mobile Preview */}
+                                <div className="p-6 bg-white border border-stone-200 shadow-inner flex flex-col items-center justify-center min-h-[120px] relative">
+                                    <div className="absolute top-2 left-3 flex items-center gap-1.5 text-[9px] font-bold uppercase tracking-widest text-stone-400">
+                                        <Smartphone className="w-3 h-3" />
+                                        <span>Phone / Mobile View</span>
+                                    </div>
+                                    {headerLogoImage ? (
+                                        <img 
+                                            src={headerLogoImage} 
+                                            alt="Header Logo Mobile Preview" 
+                                            style={{ maxHeight: `${headerLogoHeightMobile}px`, maxWidth: '180px' }} 
+                                            className="object-contain mt-3" 
+                                        />
+                                    ) : (
+                                        <div className="text-stone-400 text-xs font-bold uppercase tracking-wider italic mt-3">Default Taatroop Logo active (No custom logo uploaded)</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            case 'categories': return (
+                <div className={cardClass}>
+                    <CompactSectionHeader icon={Tag} title="OUR COLLECTIONS" sub="Explore Our Collections" />
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {categoriesList.map(cat => (
+                                <div key={cat} className="p-4 border border-stone-100 rounded-none bg-stone-50/30 space-y-4 group">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="font-bold text-sm uppercase tracking-tighter flex items-center gap-2">
+                                                {cat}
+                                                {pausedCategoriesList.includes(cat) && (
+                                                    <span className="text-[9px] bg-red-100 text-red-800 font-bold px-1.5 py-0.5 rounded-none uppercase">Paused</span>
+                                                )}
+                                            </span>
+                                        </div>
+                                        <button onClick={() => handleRemoveCategory(cat)} className="text-stone-300 hover:text-red-500 transition p-1">
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    
+                                    <ImageAssetInput 
+                                        label="Collection Image (OUR COLLECTIONS)"
+                                        currentImage={categoryImages.find(ci => ci.categoryName && ci.categoryName.toLowerCase() === cat.toLowerCase())?.image || ''} 
+                                        onImageChange={val => setCategoryImages(prev => {
+                                            const exists = prev.some(ci => ci.categoryName && ci.categoryName.toLowerCase() === cat.toLowerCase());
+                                            if (exists) {
+                                                return prev.map(ci => ci.categoryName && ci.categoryName.toLowerCase() === cat.toLowerCase() ? {...ci, image: val} : ci);
+                                            } else {
+                                                return [...prev, { categoryName: cat, image: val }];
+                                            }
+                                        })}
+                                        options={{maxWidth: 600, quality: 0.8}}
+                                    />
+
+                                    {/* Toggles Container */}
+                                    <div className="grid grid-cols-2 gap-2 border-t border-stone-100 pt-3">
+                                        {/* Pause Toggle */}
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!pausedCategoriesList.includes(cat)} 
+                                                onChange={() => {
+                                                    if (pausedCategoriesList.includes(cat)) {
+                                                        setPausedCategoriesList(prev => [...prev, cat]);
+                                                    } else {
+                                                        setPausedCategoriesList(prev => prev.filter(c => c !== cat));
+                                                    }
+                                                }}
+                                                className="rounded-none border-stone-300 text-stone-950 focus:ring-stone-950 w-3.5 h-3.5"
+                                            />
+                                            <span className="text-[10px] font-bold uppercase tracking-tight text-stone-500">
+                                                Active
+                                            </span>
+                                        </label>
+
+                                        {/* OUR COLLECTIONS Section Visibility Toggle */}
+                                        <label className="flex items-center gap-2 cursor-pointer select-none">
+                                            <input 
+                                                type="checkbox" 
+                                                checked={menuCategoriesList.includes(cat)} 
+                                                onChange={() => {
+                                                    if (menuCategoriesList.includes(cat)) {
+                                                        setMenuCategoriesList(prev => prev.filter(c => c !== cat));
+                                                    } else {
+                                                        setMenuCategoriesList(prev => [...prev, cat]);
+                                                    }
+                                                }}
+                                                className="rounded-none border-stone-300 text-stone-950 focus:ring-stone-950 w-3.5 h-3.5"
+                                            />
+                                            <span className="text-[10px] font-bold uppercase tracking-tight text-stone-500">
+                                                SHOW IN OUR COLLECTIONS
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Iframe-Safe Custom Delete Confirmation Modal */}
+                    {categoryToDelete && (
+                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fadeIn font-sans">
+                            <div className="bg-white p-6 sm:p-8 max-w-md w-full border border-stone-200 shadow-xl space-y-6">
+                                <h4 className="text-sm font-bold text-stone-900 uppercase tracking-widest">Remove Category?</h4>
+                                <p className="text-xs text-stone-500 font-medium leading-relaxed">
+                                    Are you sure you want to remove the category <span className="font-bold text-stone-900">"{categoryToDelete}"</span>? Products belonging to this category will no longer show up under filters or category views.
+                                </p>
+                                <div className="flex gap-3 justify-end">
+                                    <button 
+                                        onClick={() => setCategoryToDelete(null)}
+                                        className="px-4 py-2 bg-stone-100 hover:bg-stone-200 text-stone-800 text-[10px] font-bold uppercase tracking-wider"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        onClick={confirmDeleteCategory}
+                                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-[10px] font-bold uppercase tracking-wider animate-pulse"
+                                    >
+                                        Yes, Remove
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+
+            case 'general': return (
+                <div className="space-y-6">
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={Shield} title="Dashboard Security" sub="Admin Access Control" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2 space-y-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                    <FormLabel>Admin Primary Email</FormLabel>
+                                    <Lock className="w-3 h-3 text-stone-400 mb-1" />
+                                </div>
+                                <ProfessionalInput value={adminEmail} onChange={e => setAdminEmail(e.target.value)} />
+                            </div>
+                            
+                            {/* New Secure Password with Toggle */}
+                            <div className="space-y-1">
+                                <FormLabel>New Secure Password</FormLabel>
+                                <div className="relative group">
+                                    <ProfessionalInput 
+                                        type={showNewPass ? 'text' : 'password'} 
+                                        value={newPassword} 
+                                        onChange={e => setNewPassword(e.target.value)} 
+                                        placeholder="••••••••" 
+                                        className="pr-10"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowNewPass(!showNewPass)} 
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300 hover:text-stone-950 transition-colors"
+                                    >
+                                        {showNewPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            {/* Verify New Password with Toggle */}
+                            <div className="space-y-1">
+                                <FormLabel>Verify New Password</FormLabel>
+                                <div className="relative group">
+                                    <ProfessionalInput 
+                                        type={showConfirmPass ? 'text' : 'password'} 
+                                        value={confirmNewPassword} 
+                                        onChange={e => setConfirmNewPassword(e.target.value)} 
+                                        placeholder="••••••••" 
+                                        className="pr-10"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowConfirmPass(!showConfirmPass)} 
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-300 hover:text-stone-950 transition-colors"
+                                    >
+                                        {showConfirmPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {isPasswordModified && (
+                            <div className="p-4 bg-stone-50 rounded-none border border-stone-100 flex gap-3 items-start animate-fadeIn">
+                                <AlertTriangle className="w-5 h-5 text-stone-900 flex-shrink-0 mt-0.5" />
+                                <p className="text-xs font-bold text-stone-900 leading-relaxed uppercase tracking-tight font-admin">
+                                    Important: Changing security credentials requires typed confirmation below "Push Updates" to activate.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+
+            case 'payments': return (
+                <div className="space-y-6">
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={CreditCard} title="Transaction Portal" sub="Gateway Configurations" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2 font-admin">
+                            <label className={`flex items-center gap-3 p-4 border rounded-none cursor-pointer transition-all ${codEnabled ? 'border-stone-900 bg-stone-50' : 'border-stone-100 bg-stone-50'}`}>
+                                <input type="checkbox" checked={codEnabled} onChange={e => setCodEnabled(e.target.checked)} className="w-5 h-5 text-stone-900" />
+                                <span className="text-xs font-bold uppercase tracking-tight text-stone-900">Cash on Delivery</span>
+                            </label>
+                            <label className={`flex items-center gap-3 p-4 border rounded-none cursor-pointer transition-all ${onlinePaymentEnabled ? 'border-stone-900 bg-stone-50' : 'border-stone-100 bg-stone-50'}`}>
+                                <input type="checkbox" checked={onlinePaymentEnabled} onChange={e => setOnlinePaymentEnabled(e.target.checked)} className="w-5 h-5 text-stone-900" />
+                                <span className="text-xs font-bold uppercase tracking-tight text-stone-900">Online Advance</span>
+                            </label>
+                        </div>
+                        {onlinePaymentEnabled && (
+                            <div className="space-y-6 pt-4 border-t border-stone-50">
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center px-1">
+                                        <FormLabel>Payment Instructions (HTML)</FormLabel>
+                                        <select value={onlinePaymentFontSize} onChange={e => setOnlinePaymentFontSize(e.target.value)} className="text-xs font-bold p-1 bg-white border border-stone-200 rounded-none outline-none">
+                                            <option value="0.75rem">Compact</option>
+                                            <option value="0.875rem">Standard</option>
+                                            <option value="1rem">Emphasized</option>
+                                        </select>
+                                    </div>
+                                    <ProfessionalTextarea value={onlinePaymentInfo} onChange={e => setOnlinePaymentInfo(e.target.value)} rows={4} placeholder="<b>Send Charge to:</b> 01XXX..." />
+                                    <p className="text-[10px] text-stone-400 uppercase tracking-tight px-1 flex items-center gap-1"><Info className="w-3 h-3" /> Supports &lt;b&gt; and &lt;br&gt; tags.</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <FormLabel>Accepted Methods (Comma Separated)</FormLabel>
+                                    <ProfessionalInput value={onlinePaymentMethodsText} onChange={e => setOnlinePaymentMethodsText(e.target.value)} placeholder="Bkash, Nagad, Rocket" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                    <div className={cardClass}>
+                        <div className="space-y-4 mb-6 font-admin">
+                            <label className={`flex items-center gap-4 p-5 border-2 rounded-none cursor-pointer transition-all ${freeShippingEnabled ? 'border-black bg-stone-50 shadow-md' : 'border-stone-100 bg-stone-50'}`}>
+                                <div className={`p-2 rounded-none ${freeShippingEnabled ? 'bg-stone-900 text-white' : 'bg-stone-200 text-stone-400'}`}>
+                                    <Truck className="w-5 h-5" />
+                                </div>
+                                <div className="flex-grow">
+                                    <span className="block text-sm font-black uppercase tracking-tight text-stone-800">Charge Free (Free Delivery)</span>
+                                    <span className="text-xs text-stone-400 uppercase font-bold">Disable delivery charge selection and set to 0৳ for all orders</span>
+                                </div>
+                                <input type="checkbox" checked={freeShippingEnabled} onChange={e => setFreeShippingEnabled(e.target.checked)} className="w-6 h-6 text-stone-900 rounded-none" />
+                            </label>
+                        </div>
+
+                        <div className="flex justify-between items-center mb-2 pt-4 border-t border-stone-100">
+                            <CompactSectionHeader icon={Move} title="Logistics Engine" sub="Delivery Charge Matrix" />
+                            <button onClick={handleAddShipping} className="text-stone-900 font-bold text-xs uppercase flex items-center gap-1 border border-stone-100 px-3 py-1 rounded-none hover:bg-stone-50 font-admin transition-all">+ Add Zone</button>
+                        </div>
+                        <div className="space-y-3 font-admin">
+                            {shippingOptions.map(opt => (
+                                <div key={opt.id} className="flex gap-3 items-end p-3 bg-stone-50 rounded-none border border-stone-100 group">
+                                    <div className="flex-1 space-y-1">
+                                        <FormLabel>Location Title</FormLabel>
+                                        <ProfessionalInput value={opt.label} onChange={e => setShippingOptions(p => p.map(o => o.id === opt.id ? {...o, label: e.target.value} : o))} placeholder="Inside Dhaka" />
+                                    </div>
+                                    <div className="w-24 space-y-1">
+                                        <FormLabel>Charge (৳)</FormLabel>
+                                        <ProfessionalInput type="number" value={opt.charge} onChange={e => setShippingOptions(p => p.map(o => o.id === opt.id ? {...o, charge: Number(e.target.value)} : o))} className="font-bold text-stone-900" />
+                                    </div>
+                                    <button onClick={() => setShippingOptions(p => p.filter(o => o.id !== opt.id))} className="p-2.5 text-stone-300 hover:text-red-500 transition bg-white border border-stone-100 rounded-none group-hover:border-red-100 shadow-sm"><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                            ))}
+                            {shippingOptions.length === 0 && <p className="text-center py-6 text-stone-300 text-xs uppercase tracking-tight border border-dashed rounded-none">No shipping zones configured.</p>}
+                        </div>
+                    </div>
+                </div>
+            );
+
+            case 'appearance': return (
+                <div className="space-y-6 font-admin">
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={Layout} title="Home Page Hero Banner" sub="Configure Landing Page Hero Layout, Background, Text & Video Modal" />
+                        
+                        {/* Live Hero Banner Preview Card */}
+                        <div className="p-4 bg-stone-900 border border-stone-800 rounded-none text-white relative overflow-hidden font-admin">
+                            <div className="text-[10px] font-bold text-amber-300 uppercase tracking-widest mb-2 flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5" /> Live Hero Layout Preview (HomePage Match)
+                            </div>
+                            <div className="p-6 bg-[#18201C] border border-stone-800 relative rounded-none flex flex-col justify-center min-h-[220px]">
+                                {heroImage && (
+                                    <div className="absolute inset-0 z-0 opacity-40">
+                                        <SafeImage src={heroImage} alt="Hero Preview" className="w-full h-full object-cover" />
+                                    </div>
+                                )}
+                                <div className="relative z-10 max-w-lg space-y-2">
+                                    <span className="text-[10px] font-bold tracking-[0.3em] text-amber-200 uppercase block">{heroEyebrow || 'TAATROOP'}</span>
+                                    <h2 className="font-serif text-2xl font-medium text-amber-50 whitespace-pre-line leading-tight">{heroTitle || 'ঐতিহ্যের বুননে\nআস্থার স্পর্শ'}</h2>
+                                    <p className="text-[9px] font-semibold tracking-widest uppercase text-stone-300">{heroSubtitle || 'PREMIUM HANDLOOM LUNGI'}</p>
+                                    <div className="flex gap-3 pt-2">
+                                        <span className="px-3 py-1 bg-[#121816] border border-stone-700 text-[9px] font-bold uppercase tracking-wider text-white">{heroButtonText || 'SHOP COLLECTION'}</span>
+                                        <span className="px-3 py-1 border border-white/40 text-[9px] font-bold uppercase tracking-wider text-amber-200 flex items-center gap-1"><Play className="w-2.5 h-2.5 fill-amber-200" /> {heroVideoButtonText || 'WATCH VIDEO'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Image Uploads */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+                            <ImageAssetInput 
+                                label="Main Hero Background Image (Desktop)" 
+                                description="Upload or paste URL for the main desktop landing hero banner background image."
+                                currentImage={heroImage} 
+                                onImageChange={val => setHeroImage(val)} 
+                                options={{maxWidth: 1920, quality: 0.85}} 
+                            />
+                            <ImageAssetInput 
+                                label="Mobile Hero Background Image (Optional)" 
+                                description="Upload or paste URL for mobile-optimized hero background image."
+                                currentImage={heroMobileImage} 
+                                onImageChange={val => setHeroMobileImage(val)} 
+                                options={{maxWidth: 900, quality: 0.85}} 
+                            />
+                        </div>
+
+                        {/* Text Fields Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 font-admin">
+                            <div className="space-y-1">
+                                <FormLabel>Brand Eyebrow Tag</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroEyebrow} 
+                                    onChange={e => setHeroEyebrow(e.target.value)} 
+                                    placeholder="TAATROOP" 
+                                />
+                                <p className="text-[10px] text-stone-400">Small uppercase brand label above title.</p>
+                            </div>
+
+                            <div className="space-y-1">
+                                <FormLabel>Primary Button Text</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroButtonText} 
+                                    onChange={e => setHeroButtonText(e.target.value)} 
+                                    placeholder="SHOP COLLECTION" 
+                                />
+                            </div>
+
+                            <div className="space-y-1 md:col-span-2">
+                                <FormLabel>Main Headline Title (Bengali / English)</FormLabel>
+                                <ProfessionalTextarea 
+                                    value={heroTitle} 
+                                    onChange={e => setHeroTitle(e.target.value)} 
+                                    rows={2} 
+                                    placeholder="ঐতিহ্যের বুননে&#10;আস্থার স্পর্শ" 
+                                />
+                                <p className="text-[10px] text-stone-400">Use Enter key to split headline into multiple lines.</p>
+                            </div>
+
+                            <div className="space-y-1 md:col-span-2">
+                                <FormLabel>Sub-headline / Tagline Description</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroSubtitle} 
+                                    onChange={e => setHeroSubtitle(e.target.value)} 
+                                    placeholder="PREMIUM HANDLOOM LUNGI FROM SIRAJGANJ, BANGLADESH" 
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <FormLabel>Primary Button Target Link</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroButtonLink} 
+                                    onChange={e => setHeroButtonLink(e.target.value)} 
+                                    placeholder="/shop" 
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <FormLabel>Video Button Label Text</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroVideoButtonText} 
+                                    onChange={e => setHeroVideoButtonText(e.target.value)} 
+                                    placeholder="WATCH VIDEO" 
+                                />
+                            </div>
+
+                            <div className="space-y-1 md:col-span-2">
+                                <FormLabel>Video Modal Display Title</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroVideoTitle} 
+                                    onChange={e => setHeroVideoTitle(e.target.value)} 
+                                    placeholder="The Art of Handloom Weaver - Sirajganj Traditional Lungi Craftsmanship" 
+                                />
+                            </div>
+
+                            <div className="space-y-1">
+                                <FormLabel>PC / Desktop YouTube Video Link</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroVideoUrlPc} 
+                                    onChange={e => { setHeroVideoUrlPc(e.target.value); if (!heroVideoUrlMobile) setHeroVideoUrlMobile(e.target.value); }} 
+                                    placeholder="https://www.youtube.com/watch?v=..." 
+                                />
+                                <p className="text-[10px] text-stone-400">Video for Computer & Laptop screens.</p>
+                            </div>
+
+                            <div className="space-y-1">
+                                <FormLabel>Phone / Mobile YouTube Video Link</FormLabel>
+                                <ProfessionalInput 
+                                    value={heroVideoUrlMobile} 
+                                    onChange={e => setHeroVideoUrlMobile(e.target.value)} 
+                                    placeholder="https://www.youtube.com/watch?v=..." 
+                                />
+                                <p className="text-[10px] text-stone-400">Video for Mobile & Tablet screens.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            case 'marketing': return (
+                <div className={cardClass}>
+                <CompactSectionHeader icon={Gift} title="Conversion Optimization" sub="Exit Intent Popup Strategy" />
+                
+                <div className="p-5 bg-stone-100 rounded-none border border-stone-200 mb-6 font-admin">
+                    <div className="flex gap-4 items-start">
+                        <div className="p-3 bg-white rounded-none shadow-sm">
+                            <Sparkles className="w-6 h-6 text-stone-900" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-black uppercase text-stone-900 mb-1">Boost Your Sales Performance</h4>
+                            <p className="text-xs text-stone-700 leading-relaxed uppercase font-semibold">
+                                The Exit Intent Popup appears when a customer is about to leave the checkout or cart page. 
+                                Offering a small discount at this critical moment can recover up to 15-20% of abandoned carts.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="space-y-6 font-admin">
+                    <label className={`flex items-center gap-4 p-5 border-2 rounded-none cursor-pointer transition-all ${exitIntentPopupEnabled ? 'border-[#23412F] bg-[#23412F]/5 shadow-md' : 'border-stone-100 bg-stone-50'}`}>
+                        <div className={`p-2 rounded-none ${exitIntentPopupEnabled ? 'bg-[#23412F] text-white' : 'bg-stone-200 text-stone-400'}`}>
+                            {exitIntentPopupEnabled ? <Eye className="w-5 h-5" /> : <EyeOff className="w-5 h-5" />}
+                        </div>
+                        <div className="flex-grow">
+                            <span className="block text-sm font-black uppercase tracking-tight text-stone-800 font-admin">Exit Intent Strategy</span>
+                            <span className="text-xs text-stone-400 uppercase font-bold">Show popup when user tries to leave site</span>
+                        </div>
+                        <input type="checkbox" checked={exitIntentPopupEnabled} onChange={e => setExitIntentPopupEnabled(e.target.checked)} className="w-6 h-6 text-[#23412F] rounded-none focus:ring-[#23412F]" />
+                    </label>
+
+                    {exitIntentPopupEnabled && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6 bg-stone-50/30 border border-stone-100 rounded-none animate-fadeIn">
+                            <div className="space-y-2">
+                                <FormLabel>Discount Amount (৳)</FormLabel>
+                                <div className="relative font-admin">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-stone-400">৳</span>
+                                    <ProfessionalInput 
+                                        type="number" 
+                                        value={exitIntentDiscount} 
+                                        onChange={e => setExitIntentDiscount(Number(e.target.value))} 
+                                        className="pl-8 font-black text-stone-900"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-stone-400 font-bold uppercase tracking-tight px-1">Amount to show on the popup tag</p>
+                            </div>
+                            
+                            <div className="space-y-2">
+                                <FormLabel>Coupon Code</FormLabel>
+                                <div className="relative font-admin">
+                                    <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
+                                    <ProfessionalInput 
+                                        value={exitIntentCouponCode} 
+                                        onChange={e => setExitIntentCouponCode(e.target.value.toUpperCase())} 
+                                        className="pl-12 font-black tracking-widest text-stone-900"
+                                        placeholder="SAVE60"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-stone-400 font-bold uppercase tracking-tight px-1 font-admin font-medium">Code customer will copy to use</p>
+                            </div>
+                            
+
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+        case 'content': return (
+                <div className="space-y-6 font-admin">
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={AlignLeft} title="Brand Legacy" sub="Footer & Global Text" />
+                        <div className="space-y-8">
+                            <div className="space-y-1">
+                                <FormLabel>Footer Brand Bio</FormLabel>
+                                <ProfessionalTextarea value={footerDescription} onChange={e => setFooterDescription(e.target.value)} rows={3} />
+                            </div>
+
+                            <div className="pt-6 border-t border-stone-50">
+                                <FormLabel>Public Contact Details (Footer)</FormLabel>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                                    <div className="space-y-1">
+                                        <FormLabel>WhatsApp Number</FormLabel>
+                                        <ProfessionalInput value={whatsappNumber} onChange={e => setWhatsappNumber(e.target.value)} placeholder="+8801..." />
+                                    </div>
+                                    <div className="flex items-center gap-3 pt-6 px-2">
+                                        <input type="checkbox" checked={showWhatsAppButton} onChange={e => setShowWhatsAppButton(e.target.checked)} className="w-5 h-5 rounded-none text-stone-900 focus:ring-stone-950/20" />
+                                        <span className="text-xs font-bold text-stone-600 uppercase tracking-tight">Show WhatsApp Button</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>Contact Hotline</FormLabel>
+                                        <ProfessionalInput value={contactPhone} onChange={e => setContactPhone(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>Support Email</FormLabel>
+                                        <ProfessionalInput value={contactEmail} onChange={e => setContactEmail(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>Footer Display Email</FormLabel>
+                                        <ProfessionalInput value={footerEmail} onChange={e => setFooterEmail(e.target.value)} placeholder="hello@taatroop.com" />
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1">
+                                        <FormLabel>Branch/Office Address</FormLabel>
+                                        <ProfessionalTextarea value={contactAddress} onChange={e => setContactAddress(e.target.value)} rows={2} />
+                                    </div>
+                                    <div className="md:col-span-2 space-y-1">
+                                        <FormLabel>Google Maps Embed URL (Iframe Code)</FormLabel>
+                                        <ProfessionalTextarea 
+                                            value={contactMapEmbed} 
+                                            onChange={e => setContactMapEmbed(e.target.value)} 
+                                            rows={2} 
+                                            placeholder='<iframe src="https://www.google.com/maps/embed?..." ...></iframe>'
+                                        />
+                                        <p className="text-[10px] text-stone-400 font-bold uppercase tracking-tight px-1 flex items-center gap-1">
+                                            <Info className="w-3 h-3" /> Paste the full iframe code from Google Maps share menu.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={Share2} title="Social Footprint" sub="External Profile Links" />
+                        <div className="space-y-4">
+                            {socialMediaLinks.map((link, idx) => (
+                                <div key={idx} className="flex gap-2 items-center bg-stone-50 p-2 rounded-none border border-stone-200 group">
+                                    <select 
+                                        value={link.platform || 'Facebook'} 
+                                        onChange={e => setSocialMediaLinks(p => p.map((l, i) => i === idx ? {...l, platform: e.target.value} : l))} 
+                                        className="p-2 bg-white border border-stone-200 rounded-none text-xs font-bold uppercase w-32 outline-none shadow-sm focus:border-[#23412F] transition-all font-admin"
+                                    >
+                                        <option value="Facebook">Facebook</option>
+                                        <option value="Instagram">Instagram</option>
+                                        <option value="TikTok">TikTok</option>
+                                        <option value="Twitter">Twitter</option>
+                                        <option value="Youtube">Youtube</option>
+                                        <option value="LinkedIn">LinkedIn</option>
+                                    </select>
+                                    <input 
+                                        value={link.url || ''} 
+                                        onChange={e => setSocialMediaLinks(p => p.map((l, i) => i === idx ? {...l, url: e.target.value} : l))} 
+                                        placeholder="https://..." 
+                                        className="flex-1 p-2 bg-white border border-stone-200 rounded-none text-xs outline-none shadow-sm focus:border-[#23412F] transition-all font-admin" 
+                                    />
+                                    <button onClick={() => setSocialMediaLinks(p => p.filter((_, i) => i !== idx))} className="p-2 text-stone-300 hover:text-red-500 transition"><Trash2 className="w-4 h-4"/></button>
+                                </div>
+                            ))}
+                            <button onClick={() => setSocialMediaLinks(p => [...p, {platform: 'Facebook', url: ''}])} className="text-stone-900 font-bold text-xs uppercase tracking-wider flex items-center gap-1 border border-stone-100 px-4 py-2 rounded-none hover:bg-stone-50 transition-all font-admin transition-all active:scale-95">+ Add Profile</button>
+                        </div>
+                    </div>
+
+                    <div className={cardClass}>
+                        <div className={cardClass.replace('bg-white p-5 sm:p-10', 'p-0 shadow-none border-none animate-none space-y-6')}>
+                            <div className="flex justify-between items-center border-b border-stone-200 pb-3">
+                                <div>
+                                    <h4 className="text-xs font-black uppercase text-stone-900 tracking-wider font-admin">Global Size Guide</h4>
+                                    <p className="text-[10px] text-stone-400 uppercase font-bold mt-1">Configure standard sizing for all products</p>
+                                </div>
+                                <button 
+                                    onClick={() => setSizeGuide(p => [...p, { size: '', chest: '', waist: '', length: '' }])}
+                                    className="text-[10px] font-black p-2 bg-stone-900 text-white uppercase tracking-widest hover:bg-black transition-colors"
+                                >
+                                    + Add Row
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-12 gap-2 px-2 hidden md:grid">
+                                    <div className="col-span-2"><FormLabel>Size</FormLabel></div>
+                                    <div className="col-span-3"><FormLabel>Chest (in)</FormLabel></div>
+                                    <div className="col-span-3"><FormLabel>Waist (in)</FormLabel></div>
+                                    <div className="col-span-3"><FormLabel>Length (in)</FormLabel></div>
+                                    <div className="col-span-1"></div>
+                                </div>
+                                
+                                {sizeGuide.map((row, idx) => (
+                                    <div key={idx} className="grid grid-cols-1 md:grid-cols-12 gap-2 items-center bg-stone-50/30 p-3 md:p-1 border border-stone-100">
+                                        <div className="col-span-2">
+                                            <div className="md:hidden"><FormLabel>Size</FormLabel></div>
+                                            <ProfessionalInput 
+                                                value={row.size} 
+                                                onChange={e => setSizeGuide(p => p.map((r, i) => i === idx ? {...r, size: e.target.value} : r))}
+                                                placeholder="S…"
+                                                className="!p-2 text-xs"
+                                            />
+                                        </div>
+                                        <div className="col-span-3">
+                                            <div className="md:hidden"><FormLabel>Chest</FormLabel></div>
+                                            <ProfessionalInput 
+                                                value={row.chest} 
+                                                onChange={e => setSizeGuide(p => p.map((r, i) => i === idx ? {...r, chest: e.target.value} : r))}
+                                                placeholder="36"
+                                                className="!p-2 text-xs"
+                                            />
+                                        </div>
+                                        <div className="col-span-3">
+                                            <div className="md:hidden"><FormLabel>Waist</FormLabel></div>
+                                            <ProfessionalInput 
+                                                value={row.waist} 
+                                                onChange={e => setSizeGuide(p => p.map((r, i) => i === idx ? {...r, waist: e.target.value} : r))}
+                                                placeholder="30"
+                                                className="!p-2 text-xs"
+                                            />
+                                        </div>
+                                        <div className="col-span-3">
+                                            <div className="md:hidden"><FormLabel>Length</FormLabel></div>
+                                            <ProfessionalInput 
+                                                value={row.length} 
+                                                onChange={e => setSizeGuide(p => p.map((r, i) => i === idx ? {...r, length: e.target.value} : r))}
+                                                placeholder="40"
+                                                className="!p-2 text-xs"
+                                            />
+                                        </div>
+                                        <div className="col-span-1 flex justify-end">
+                                            <button onClick={() => setSizeGuide(p => p.filter((_, i) => i !== idx))} className="text-stone-300 hover:text-red-500 p-2">
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                                
+                                {sizeGuide.length === 0 && (
+                                    <p className="text-center py-8 text-stone-300 text-xs uppercase font-bold border border-dashed border-stone-200">No sizing data configured.</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-1 pt-6 border-t border-stone-50">
+                                <div className="flex justify-between items-center px-1 mb-1 font-admin">
+                                    <FormLabel>Privacy Charter</FormLabel>
+                                    <span className="text-[10px] bg-stone-100 text-stone-400 px-2 py-0.5 rounded-none uppercase font-black font-admin">logic variable: {"{{CONTACT_EMAIL}}"}</span>
+                                </div>
+                                <ProfessionalTextarea value={privacyPolicy} onChange={e => setPrivacyPolicy(e.target.value)} rows={12} className="font-mono text-xs leading-relaxed" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+            case 'tracking': return (
+                <div className="space-y-6 font-admin">
+                    <div className={cardClass}>
+                        <CompactSectionHeader icon={Globe} title="Server-Side Tracking" sub="GA4 Measurement Protocol" />
+                        <div className="p-4 bg-stone-50 rounded-none border border-stone-100 mb-6 font-admin">
+                            <h4 className="text-xs font-bold text-stone-900 uppercase mb-2">How to get these?</h4>
+                            <ul className="text-[11px] text-stone-700 space-y-1 list-disc ml-4">
+                                <li><b>Measurement ID:</b> Admin &gt; Data Streams &gt; Select Stream &gt; Measurement ID (G-XXXXXXX)</li>
+                                <li><b>API Secret:</b> Admin &gt; Data Streams &gt; Select Stream &gt; Measurement Protocol API secrets (Create new)</li>
+                            </ul>
+                        </div>
+                        <div className="grid grid-cols-1 gap-6">
+                            <div className="space-y-4 pt-4 border-t border-stone-100">
+                                <h4 className="text-[11px] font-bold text-stone-900 uppercase">Google Analytics 4</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <FormLabel>GA4 Measurement ID</FormLabel>
+                                        <ProfessionalInput value={gaMeasurementId} onChange={e => setGaMeasurementId(e.target.value)} placeholder="G-XXXXXXXXXX" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>GA4 API Secret</FormLabel>
+                                        <ProfessionalInput value={gaApiSecret} onChange={e => setGaApiSecret(e.target.value)} placeholder="API Secret Key" />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 pt-4 border-t border-stone-100">
+                                <h4 className="text-[11px] font-bold text-stone-900 uppercase">Meta (Facebook) CAPI</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <FormLabel>Pixel ID</FormLabel>
+                                        <ProfessionalInput value={fbPixelId} onChange={e => setFbPixelId(e.target.value)} placeholder="1234567890" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>CAPI Access Token</FormLabel>
+                                        <ProfessionalInput value={fbAccessToken} onChange={e => setFbAccessToken(e.target.value)} placeholder="EAAB..." />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <FormLabel>Meta Test Event Code</FormLabel>
+                                        <ProfessionalInput value={fbTestCode} onChange={e => setFbTestCode(e.target.value)} placeholder="TEST12345" />
+                                        <p className="text-[9px] text-stone-500">Only for testing. Remove this code when you're done testing to avoid issues.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4 pt-4 border-t border-orange-100">
+                                <h4 className="text-[11px] font-bold text-orange-900 uppercase">Google Tag Manager</h4>
+                                <div className="space-y-1">
+                                    <FormLabel>GTM ID</FormLabel>
+                                    <ProfessionalInput value={gtmId} onChange={e => setGtmId(e.target.value)} placeholder="GTM-XXXXXXX" />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="mt-6 p-4 bg-stone-50 rounded-none border border-stone-200">
+                             <p className="text-xs text-stone-500 font-medium">
+                                This configuration enables <b>Server-Side Tracking</b>. Unlike standard GTM, events are sent directly from your server to Google Analytics. This bypasses ad-blockers and ensures 100% data accuracy for orders.
+                             </p>
+                        </div>
+                    </div>
+                </div>
+            );
+
+            case 'telegram': return (
+                <div className={cardClass}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-100 pb-6">
+                        <CompactSectionHeader icon={MessageSquare} title="Telegram Bot Notifications" sub="Real-time Phone Ringtone & Vibration Alert (1-2s)" />
+                        <span className="inline-flex items-center gap-2 px-3 py-1 bg-emerald-50 text-emerald-700 text-[10px] font-black uppercase tracking-widest border border-emerald-200">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            Instant Phone Push
+                        </span>
+                    </div>
+
+                    <div className="space-y-6">
+                        {/* Enable/Disable Toggle */}
+                        <div className="p-4 bg-stone-50 border border-stone-100 flex items-center justify-between">
+                            <div>
+                                <h4 className="text-xs font-bold text-stone-900 uppercase tracking-tight">Enable Telegram Instant Alert</h4>
+                                <p className="text-[10px] text-stone-500 mt-0.5">Receive immediate notification with loud ringtone sound on phone as soon as an order is placed.</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={telegramEnabled} 
+                                    onChange={e => setTelegramEnabled(e.target.checked)} 
+                                    className="sr-only peer" 
+                                />
+                                <div className="w-11 h-6 bg-stone-200 peer-focus:outline-none peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-stone-950"></div>
+                            </label>
+                        </div>
+
+                        {/* Credentials inputs */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <FormLabel>Telegram Bot Token</FormLabel>
+                                <div className="relative">
+                                    <input 
+                                        type={showTelegramToken ? 'text' : 'password'}
+                                        value={telegramBotToken} 
+                                        onChange={e => setTelegramBotToken(e.target.value)} 
+                                        placeholder="7890123456:AAFx..." 
+                                        className="w-full p-3 bg-stone-50 border border-stone-100 rounded-none text-sm text-stone-900 focus:border-black focus:ring-4 focus:ring-stone-950/5 transition-all outline-none font-bold font-admin pr-10"
+                                    />
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setShowTelegramToken(!showTelegramToken)} 
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-900"
+                                    >
+                                        {showTelegramToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">
+                                    Obtained from @BotFather on Telegram.
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <FormLabel>Telegram Chat ID or Group ID</FormLabel>
+                                <ProfessionalInput 
+                                    value={telegramChatId} 
+                                    onChange={e => setTelegramChatId(e.target.value)} 
+                                    placeholder="123456789 or -100123456789" 
+                                />
+                                <p className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">
+                                    Your user ID or Group Chat ID. (e.g. from @userinfobot)
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Test & Guide Actions */}
+                        <div className="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-stone-100">
+                            <button
+                                type="button"
+                                onClick={handleTestTelegram}
+                                disabled={isTestingTelegram || !telegramBotToken || !telegramChatId}
+                                className="px-6 py-3 bg-stone-950 text-white text-xs font-bold uppercase tracking-widest hover:bg-black transition-all flex items-center gap-2.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isTestingTelegram ? (
+                                    <>
+                                        <LoaderCircle className="w-4 h-4 animate-spin text-amber-400" />
+                                        Sending Test Notification...
+                                    </>
+                                ) : (
+                                    <>
+                                        <MessageSquare className="w-4 h-4 text-sky-400" />
+                                        Send Test Notification 🔔
+                                    </>
+                                )}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowTelegramGuide(!showTelegramGuide)}
+                                className="text-xs font-bold text-stone-600 hover:text-stone-950 underline underline-offset-4 flex items-center gap-1.5 uppercase tracking-wider"
+                            >
+                                <HelpCircle className="w-4 h-4 text-stone-400" />
+                                {showTelegramGuide ? "Hide Setup Guide" : "1-Minute Setup Guide (সহজ নিয়ম)"}
+                            </button>
+                        </div>
+
+                        {/* Step-by-Step Guide Box */}
+                        {showTelegramGuide && (
+                            <div className="p-6 bg-stone-50 border border-stone-200/80 space-y-4 animate-fadeIn">
+                                <h4 className="text-xs font-black text-stone-900 uppercase tracking-widest flex items-center gap-2">
+                                    📱 টেলিগ্রাম বোট সেটআপ করার সহজ ৪ টি ধাপ (1-Minute Setup):
+                                </h4>
+                                <ol className="space-y-3 text-xs text-stone-700 leading-relaxed list-decimal list-inside font-sans font-medium">
+                                    <li>
+                                        <b>ধাপ ১ (Bot Token তৈরি):</b> টেলিগ্রাম অ্যাপ খুলে সার্চবারে <code>@BotFather</code> লিখে সার্চ দিন। এরপর <code>/newbot</code> পাঠিয়ে যেকোনো একটি নাম ও ইউজারনেম দিন। BotFather আপনাকে একটি <b>API Token</b> দিবে (যেমন: <code>7890123456:AAFx...</code>)। সেটি কপি করে উপরের <b>Bot Token</b> বক্সে বসান।
+                                    </li>
+                                    <li>
+                                        <b>ধাপ ২ (Bot স্টার্ট করা):</b> BotFather যে বোটের লিংক দিয়েছে (t.me/your_bot_username) সেখানে ক্লিক করে টেলিগ্রামে আপনার নতুন বোটে ঢুকে <b>Start</b> বাটনে চাপ দিন।
+                                    </li>
+                                    <li>
+                                        <b>ধাপ ৩ (Chat ID বের করা):</b> টেলিগ্রাম সার্চবারে <code>@userinfobot</code> লিখে সার্চ দিন এবং <code>/start</code> সেন্ড করুন। বোটটি আপনাকে আপনার <b>Id</b> সংখ্যাটি দেখাবে (যেমন: <code>123456789</code>)। সেটি কপি করে <b>Chat ID</b> বক্সে বসান।
+                                    </li>
+                                    <li>
+                                        <b>ধাপ ৪ (টেস্ট ও সেভ):</b> এবার <b>"Send Test Notification 🔔"</b> বাটনে চাপ দিন। আপনার ফোনে টেলিগ্রামে শব্দ করে নোটিফিকেশন এসে পৌঁছাবে! এরপর নিচে <b>Push</b> বাটনে ক্লিক করে সেভ করে নিন।
+                                    </li>
+                                </ol>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+            case 'ourStory': return (
+                <div className={cardClass}>
+                    <CompactSectionHeader icon={BookOpen} title="OUR STORY PAGE IMAGES" sub="Manage image assets for the /our-story page" />
+                    
+                    <div className="space-y-8 font-admin">
+                        <div className="p-4 bg-amber-50/80 border border-amber-200 text-xs text-amber-900 leading-relaxed font-medium">
+                            Here you can update all images displayed on the <strong>/our-story</strong> page. You can either paste an image URL or upload a file directly from your computer/device.
+                        </div>
+
+                        {/* 1. Our Story Hero Background Image */}
+                        <div className="p-5 bg-stone-50 border border-stone-200/80 space-y-3">
+                            <h4 className="text-xs font-bold text-stone-900 uppercase tracking-tight">1. Our Story Hero Background Image</h4>
+                            <p className="text-[11px] text-stone-500">Main top banner background image on the /our-story page.</p>
+                            <ImageAssetInput 
+                                label="Hero Background Image (URL / Upload)"
+                                currentImage={ourStoryHeroImage}
+                                onImageChange={val => setOurStoryHeroImage(val)}
+                                options={{ maxWidth: 1600, quality: 0.85 }}
+                            />
+                        </div>
+
+                        {/* 2. Story Section Craftsmanship Image */}
+                        <div className="p-5 bg-stone-50 border border-stone-200/80 space-y-3">
+                            <h4 className="text-xs font-bold text-stone-900 uppercase tracking-tight">2. Sirajganj Weaving Craftsmanship Image</h4>
+                            <p className="text-[11px] text-stone-500">Image beside "যেখানে সুতার সুক্ষ্ম টানে জন্ম নেয় বাঙালির পছন্দ" section.</p>
+                            <ImageAssetInput 
+                                label="Weaver Craftsmanship Image (URL / Upload)"
+                                currentImage={ourStoryStoryImage}
+                                onImageChange={val => setOurStoryStoryImage(val)}
+                                options={{ maxWidth: 1200, quality: 0.85 }}
+                            />
+                        </div>
+
+                        {/* 3. Heritage Banner Image */}
+                        <div className="p-5 bg-stone-50 border border-stone-200/80 space-y-3">
+                            <h4 className="text-xs font-bold text-stone-900 uppercase tracking-tight">3. Heritage Banner Image</h4>
+                            <p className="text-[11px] text-stone-500">Banner image for "ঐতিহ্য বাঁচিয়ে রাখা ও নতুন দিগন্তের সূচনা" section.</p>
+                            <ImageAssetInput 
+                                label="Heritage Showcase Image (URL / Upload)"
+                                currentImage={ourStoryHeritageImage}
+                                onImageChange={val => setOurStoryHeritageImage(val)}
+                                options={{ maxWidth: 1200, quality: 0.85 }}
+                            />
+                        </div>
+
+                        {/* 4. Gallery Images List */}
+                        <div className="p-5 bg-stone-50 border border-stone-200/80 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <h4 className="text-xs font-bold text-stone-900 uppercase tracking-tight">4. Additional Gallery Images</h4>
+                                    <p className="text-[11px] text-stone-500">Extra images for the /our-story page gallery grid.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setOurStoryGalleryImages(prev => [...prev, ''])}
+                                    className="px-3.5 py-2 bg-stone-900 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-black transition flex items-center gap-1.5"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Add New Image
+                                </button>
+                            </div>
+
+                            {ourStoryGalleryImages.length === 0 ? (
+                                <div className="p-6 bg-white border border-dashed border-stone-300 text-center text-xs text-stone-400 font-medium">
+                                    No gallery images added yet. Click "Add New Image" above to upload or insert image URLs.
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {ourStoryGalleryImages.map((imgUrl, idx) => (
+                                        <div key={idx} className="p-4 bg-white border border-stone-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div className="flex-1 w-full">
+                                                <ImageAssetInput 
+                                                    label={`Gallery Image #${idx + 1}`}
+                                                    currentImage={imgUrl}
+                                                    onImageChange={val => {
+                                                        setOurStoryGalleryImages(prev => {
+                                                            const copy = [...prev];
+                                                            copy[idx] = val;
+                                                            return copy;
+                                                        });
+                                                    }}
+                                                    options={{ maxWidth: 1200, quality: 0.8 }}
+                                                />
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setOurStoryGalleryImages(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-stone-400 hover:text-red-600 transition p-1.5 self-end sm:self-center"
+                                                title="Remove Image"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+            default: return null;
+        }
+    };
+
+    return (
+        <div className="max-w-6xl mx-auto pb-48 px-4">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4 pt-4 font-admin">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white rounded-none shadow-xl border border-stone-100"><SettingsIcon className="w-6 h-6 text-stone-900" /></div>
+                    <div>
+                        <h1 className="text-2xl font-black text-stone-900 tracking-tighter uppercase leading-none">Core <span className="text-stone-500">Configurations</span></h1>
+                        <p className="text-xs text-stone-500 font-bold uppercase tracking-wider mt-1.5 ml-1 flex items-center gap-1.5">
+                             <span className="w-1.5 h-1.5 bg-stone-900 rounded-none animate-pulse"></span> SYSTEM SYNCHRONIZED
+                        </p>
+                    </div>
+                </div>
+                <div className="hidden lg:flex items-center gap-6">
+                    <div className="text-right">
+                        <p className="text-[10px] font-black text-stone-300 uppercase tracking-wider mb-0.5 leading-none">Sync Key: {new Date().getHours()}X-{new Date().getMinutes()}Y</p>
+                        <p className="text-[10px] font-black text-stone-300 uppercase tracking-wider leading-none">Core v2.5.0-Compact</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Layout Body */}
+            <div className="flex flex-col lg:grid lg:grid-cols-12 gap-8 items-start relative">
+                {/* Sidebar Navigation */}
+                <aside className="w-full lg:col-span-3 lg:sticky lg:top-24 z-30">
+                    <div className="bg-white/90 backdrop-blur-3xl p-1.5 sm:p-3 rounded-none shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-stone-100 flex lg:flex-col overflow-x-auto lg:overflow-visible scrollbar-hide gap-1 sm:gap-1.5 sticky top-20 lg:top-0">
+                        <TabButtonUI label="Header Logo" isActive={activeTab === 'headerLogo'} onClick={() => handleTabSwitch('headerLogo')} icon={ImageIcon} />
+                        <TabButtonUI label="Our Story 📖" isActive={activeTab === 'ourStory'} onClick={() => handleTabSwitch('ourStory')} icon={BookOpen} />
+                        <TabButtonUI label="Categories" isActive={activeTab === 'categories'} onClick={() => handleTabSwitch('categories')} icon={Tag} />
+                        <TabButtonUI label="Security" isActive={activeTab === 'general'} onClick={() => handleTabSwitch('general')} icon={Shield} />
+                        <TabButtonUI label="Telegram 🔔" isActive={activeTab === 'telegram'} onClick={() => handleTabSwitch('telegram')} icon={MessageSquare} />
+                        <TabButtonUI label="Payments" isActive={activeTab === 'payments'} onClick={() => handleTabSwitch('payments')} icon={CreditCard} />
+                        <TabButtonUI label="Hero" isActive={activeTab === 'appearance'} onClick={() => handleTabSwitch('appearance')} icon={Layout} />
+                        <TabButtonUI label="Marketing" isActive={activeTab === 'marketing'} onClick={() => handleTabSwitch('marketing')} icon={Gift} />
+                        <TabButtonUI label="Tracking" isActive={activeTab === 'tracking'} onClick={() => handleTabSwitch('tracking')} icon={Globe} />
+                        <TabButtonUI label="Footer" isActive={activeTab === 'content'} onClick={() => handleTabSwitch('content')} icon={Layout} />
+                    </div>
+                </aside>
+                
+                {/* Scrollable Content Region */}
+                <main className="w-full lg:col-span-9 pb-32">
+                    {renderTabContent()}
+                </main>
+            </div>
+            
+            {/* Float-Synced Save Action (Modern) */}
+            <div className="fixed bottom-6 right-6 sm:bottom-10 sm:right-10 z-[100] flex flex-col items-end gap-3">
+                 {/* Verification box: ONLY visible if active tab is Security AND password fields have value */}
+                 {isConfirmationRequired && (
+                    <div className={`p-4 bg-white/95 backdrop-blur-xl rounded-none shadow-2xl border border-stone-100 transition-all duration-500 transform ${isSaved ? 'opacity-0 scale-90 translate-y-4' : 'opacity-100 scale-100 translate-y-0'}`}>
+                        <div className="flex items-center gap-2 mb-2">
+                            <ShieldCheck className="w-3.5 h-3.5 text-stone-900" />
+                            <span className="text-[10px] font-black text-stone-500 uppercase tracking-wider">Type CONFIRM to activate</span>
+                        </div>
+                        <input 
+                            type="text" 
+                            value={confirmSyncText || ''} 
+                            onChange={e => setConfirmSyncText(e.target.value.toUpperCase())} 
+                            placeholder="CONFIRM"
+                            className={`w-36 p-2 bg-stone-50 border rounded-none text-xs font-black tracking-widest text-center transition-all outline-none ${confirmSyncText === 'CONFIRM' ? 'border-green-500 ring-4 ring-green-100 bg-white' : 'border-stone-200 focus:border-stone-900 focus:ring-4 focus:ring-stone-100'}`}
+                        />
+                    </div>
+                 )}
+
+                <button 
+                    onClick={handleSave} 
+                    disabled={isSaving || isSaved || !isConfirmationValid} 
+                    className={`
+                        group px-6 sm:px-8 py-4 sm:py-5 rounded-none shadow-[0_20px_50px_rgba(0,0,0,0.2)] font-black transition-all duration-500 flex items-center gap-3 sm:gap-4 active:scale-95
+                        ${isSaved 
+                            ? 'bg-green-500 text-white scale-105 shadow-green-200' 
+                            : isConfirmationValid
+                                ? 'bg-stone-950 text-white hover:bg-black hover:-translate-y-2'
+                                : 'bg-stone-200 text-stone-400 shadow-none cursor-not-allowed'
+                        }
+                        disabled:opacity-80
+                    `}
+                >
+                    <div className={`p-2 rounded-none transition-all duration-500 ${isSaved ? 'bg-white/20' : (isConfirmationValid ? 'bg-white/10 group-hover:rotate-12' : 'bg-stone-300')}`}>
+                        {isSaving ? <LoaderCircle className="w-5 h-5 animate-spin" /> : isSaved ? <CheckCircle className="w-5 h-5" /> : <Save className="w-5 h-5" />}
+                    </div>
+                    <div className="flex flex-col items-start text-left leading-none pr-1 sm:pr-2">
+                        <span className="uppercase tracking-wider text-[10px] sm:text-[11px] opacity-70 mb-1 sm:mb-1.5 font-bold">{isSaving ? 'Processing' : isSaved ? 'Success' : 'Ready'}</span>
+                        <span className="uppercase tracking-widest text-xs sm:text-sm font-black">{isSaving ? 'Syncing...' : isSaved ? 'Done' : 'Push'}</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// Internal Nav Link UI
+const TabButtonUI: React.FC<{ label: string; isActive: boolean; onClick: () => void; icon: React.ElementType }> = ({ label, isActive, onClick, icon: Icon }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`whitespace-nowrap lg:w-full text-left px-4 py-3 sm:py-3.5 rounded-none transition-all duration-500 text-sm font-black flex items-center gap-3 group ${
+            isActive 
+                ? 'bg-stone-950 text-white shadow-xl translate-y-0 lg:translate-x-1.5' 
+                : 'text-stone-500 hover:bg-stone-50 hover:text-stone-950 hover:translate-x-1'
+        }`}
+    >
+        <div className={`p-2 rounded-none transition-all duration-500 ${isActive ? 'bg-white/20' : 'bg-stone-100 group-hover:bg-stone-200'}`}>
+            <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </div>
+        <span className="uppercase tracking-tight text-[11px] sm:text-xs">{label}</span>
+        {isActive && <ChevronRight className="hidden lg:block w-3.5 h-3.5 ml-auto opacity-50" />}
+    </button>
+);
+
+export default AdminSettingsPage;
