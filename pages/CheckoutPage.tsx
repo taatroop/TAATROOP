@@ -1002,7 +1002,7 @@ const CheckoutPage: React.FC = () => {
                         ) : (
                             <>
                                 <span className="font-bold text-sm sm:text-base md:text-lg tracking-wide text-white">
-                                    অর্ডার নিশ্চিত করুন — ৳{totalPayable.toLocaleString()}
+                                    Purchase{totalPayable.toLocaleString()}
                                 </span>
                                 <ShoppingBag className="w-5 h-5 text-amber-300 flex-shrink-0" />
                             </>
