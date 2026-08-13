@@ -133,7 +133,7 @@ const CartPage: React.FC = () => {
                       className="w-full bg-[#121816] hover:bg-stone-800 text-white py-4 font-bold uppercase tracking-wider text-xs transition-all shadow-md flex items-center justify-center space-x-2"
                   >
                       <Truck size={16} />
-                      <span>অর্ডার নিশ্চিত করতে এগিয়ে যান</span>
+                      <span>Secure Checkout</span>
                   </button>
                   
                   <div className="text-center pt-2">
