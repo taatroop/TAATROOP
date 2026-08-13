@@ -418,7 +418,7 @@ const HomePage: React.FC = () => {
               OUR COLLECTIONS
             </span>
             <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl text-stone-900 font-normal">
-              Explore Our Collections
+              Explore Our Collections BD
             </h2>
           </div>
 
