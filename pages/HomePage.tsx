@@ -526,7 +526,7 @@ const HomePage: React.FC = () => {
                       className="mt-2.5 w-full py-2 bg-[#23412F] hover:bg-[#1B3225] text-white text-[11px] font-bold uppercase tracking-wider rounded-xs flex items-center justify-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
                     >
                       <Eye size={13} />
-                      <span>View Item</span>
+                      <span>VIEW PRODUCT</span>
                     </button>
                   </div>
                 </div>
